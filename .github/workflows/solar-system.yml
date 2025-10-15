@@ -16,7 +16,14 @@ env:
 jobs: 
     unit-testing:
         name: unit testing
-        runs-on: ubuntu-latest
+        strategy:
+          matrix:
+            nodejs_version: [18, 19, 20]
+            os: [ubuntu-latest, windows-latest]
+            exclude:
+              - nodejs_version: 19
+              - os: windows-latest
+        runs-on: ${{matrix.os}}
 
         steps:
         - name: checkout repository
@@ -25,7 +32,7 @@ jobs:
         - name: setup nodejs setup
           uses: actions/setup-node@v3
           with:
-            node-version: 18
+            node-version: ${{matrix.nodejs_version}}
         
         - name: install npm dependencies
           run: npm install
