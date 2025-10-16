@@ -34,6 +34,12 @@ jobs:
           with:
             node-version: ${{matrix.nodejs_version}}
         
+
+        - name: cache NPM dependency
+          uses: actions/cache@v4
+          with:
+            path: node-modules
+            key: ${{runner.os}}-node-modules-${{hashFiles('package-lock.json')}}    
         - name: install npm dependencies
           run: npm install
 
@@ -41,13 +47,13 @@ jobs:
           id: nodejs-unit-testing-step
           run: npm test
 
-        - name: Archive Test result
-        ## if failureif: failure() && (steps.nodejs-unit-testing-step == 'failure' || steps.nodejs-unit-testing-step == 'success')
-          if: always()
-          uses: actions/upload-artifact@v4
-          with:
-            name: Mocha test resultsss
-            path: test-resultsa.xml
+        # - name: Archive Test result
+        # ## if failureif: failure() && (steps.nodejs-unit-testing-step == 'failure' || steps.nodejs-unit-testing-step == 'success')
+        #   if: always()
+        #   uses: actions/upload-artifact@v4
+        #   with:
+        #     name: Mocha test resultsss
+        #     path: test-resultsa.xml
 
     code-coverage:
       name: Code coverage
@@ -68,12 +74,12 @@ jobs:
           continue-on-error: true
           run: npm run coverage
 
-        - name: Archive Test result
-          uses: actions/upload-artifact@v4
-          with:
-            name: Code Coverage result
-            path: coverage
-            retention-days: 5
+        # - name: Archive Test result
+        #   uses: actions/upload-artifact@v4
+        #   with:
+        #     name: Code Coverage result
+        #     path: coverage
+        #     retention-days: 5
       
 
 
