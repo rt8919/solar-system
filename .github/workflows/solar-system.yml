@@ -142,7 +142,7 @@ jobs:
 
     kuber:
       needs: docker
-      runs-on: ubuntu-latest
+      runs-on: self-hosted
       steps:
         - name: checkout Repo
           uses: actions/checkout@v5
