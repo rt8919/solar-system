@@ -207,7 +207,7 @@ jobs:
 
     DEV_Integration_test:
           name: Dev Integration testing
-          needs: kuber
+          needs: dev-kuber
           runs-on: self-hosted
           steps:
             - name: Testing using CURL URL
