@@ -203,7 +203,6 @@ jobs:
             echo "APP_ingress_host=$(kubectl get ing -n ${{ vars.NAMESPACE }} -o jsonpath="{.items[*].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
 
     Integration test:
-
         - name: Dev Integration testing
           needs: kuber
           runs-on: self-hosted
