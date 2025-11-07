@@ -1,0 +1,309 @@
+name: solar system workflow
+
+on: 
+  workflow_dispatch: 
+  push:
+    branches:
+      - main
+      - 'feature/*'
+
+env:
+    MONGO_URI: 'mongodb+srv://supercluster.d83jj.mongodb.net/superData' #prod uri
+    #MONGO_URI: mongodb://localhost:27017/superData #non prod uri
+    MONGO_USERNAME: ${{ vars.MONGO_USER }}
+    MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+
+
+jobs: 
+    unit-testing:
+        name: unit testing
+        strategy:
+          matrix:
+            nodejs_version: [18, 19]
+            os: [ubuntu-latest]
+            # exclude:
+            #   - nodejs_version: 19
+            #     os: windows-latest
+        runs-on: ${{matrix.os}}
+
+
+        steps:
+        - name: checkout repository
+          uses: actions/checkout@v5
+
+        - name: setup nodejs setup
+          uses: actions/setup-node@v3
+          with:
+            node-version: ${{matrix.nodejs_version}}
+        
+
+        - name: cache NPM dependency
+          uses: actions/cache@v4
+          with:
+            path: node_modules
+            key: ${{runner.os}}-node_modules-${{hashFiles('package-lock.json')}}    
+       
+        - name: install npm dependencies
+          run: npm install
+
+        - name: Unit testing
+          id: nodejs-unit-testing-step
+          run: npm test
+
+
+        # - name: Archive Test result
+        # ## if failureif: failure() && (steps.nodejs-unit-testing-step == 'failure' || steps.nodejs-unit-testing-step == 'success')
+        #   if: always()
+        #   uses: actions/upload-artifact@v4
+        #   with:
+        #     name: Mocha test resultsss
+        #     path: test-resultsa.xml
+
+    code-coverage:
+      name: Code coverage
+      runs-on: ubuntu-latest
+      steps:
+        - name: checkout repository
+          uses: actions/checkout@v5
+
+        - name: setup nodejs setup
+          uses: actions/setup-node@v3
+          with:
+            node-version: 18
+  
+        - name: install npm dependencies
+          run: npm install
+
+        - name: Check code coverage
+          continue-on-error: true
+          run: npm run coverage
+
+        # - name: Archive Test result
+        #   uses: actions/upload-artifact@v4
+        #   with:
+        #     name: Code Coverage result
+        #     path: coverage
+        #     retention-days: 5
+
+    docker:
+      name: containerization
+      needs: [unit-testing,code-coverage]
+      permissions: 
+        packages: write
+      runs-on: ubuntu-latest
+      steps:
+        - name: checkout Repo
+          uses: actions/checkout@v5
+
+        - name: Dockerhub login
+          uses: docker/login-action@v3
+          with:
+            username: ${{ vars.DOCKERHUB_USERNAME }}
+            password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+        - name: GHCR login
+          uses: docker/login-action@v2
+          with:
+            registry: ghcr.io
+            username: ${{ github.repository_owner }}
+            password: ${{ secrets.GITHUB_TOKEN }}
+
+        - name: Docker build 
+          uses: docker/build-push-action@v6
+          with:
+            context: .
+            push: false
+            tags: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+
+        - name: Docker image testing
+          run: |
+            docker images
+            docker run --name solar-system-app -d \
+                -p 3000:3000 \
+                -e MONGO_URI=$MONGO_URI \
+                -e MONGO_USERNAME=$MONGO_USERNAME \
+                -e MONGO_PASSWORD=$MONGO_PASSWORD \
+                ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+
+            export IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' solar-system-app)
+            echo $IP
+
+            echo Testing image URL using wget
+            wget -q -O - 127.0.0.1:3000/live | grep live
+
+        - name: Docker image push in to hub
+          uses: docker/build-push-action@v6
+          with:
+            context: .
+            push: true
+            tags: |
+              ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+              ghcr.io/${{github.repository_owner}}/solar-system:${{ github.sha }}
+
+    dev-kuber:
+      if: contains(github.ref, 'feature/')
+      needs: docker
+      environment:
+        name: development
+        url: https://${{ steps.set_ingress_host_address.outputs.APP_ingress_host }}
+      outputs:
+        APP_ingress_URL: ${{ steps.set_ingress_host_address.outputs.APP_ingress_host }} 
+
+      runs-on: self-hosted
+      steps:
+        - name: checkout Repo
+          uses: actions/checkout@v5
+
+        - name: Installing kubectl
+          uses: azure/setup-kubectl@v4
+
+        - name: Fetch k8's cluster details
+          run: |
+            kubectl version --client
+            echo -------------------------------------
+            kubectl get nodes
+
+        - name: saving Ingress IP as ENV variable
+          run: |
+            echo "INGRESS_IP=$(kubectl -n ingress-nginx get service ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[*].ip}')" >> $GITHUB_ENV
+
+        - name: Replace token in manifest files
+          uses: cschleiden/replace-tokens@v1
+          with:
+            tokenPrefix: '{'
+            tokenSuffix: '}'
+            files: '["kubernetes/development/*.yaml"]'
+          env:
+            NAMESPACE: ${{ vars.NAMESPACE }}
+            REPLICAS: ${{ vars.REPLICAS }}
+            IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+            INGRESS_IP: ${{ env.INGRESS_IP }}
+
+        - name: Check files
+          run: cat kubernetes/development/*.yaml
+
+        - name: Ensure namespace exists
+          run: |
+             kubectl get namespace ${{ vars.NAMESPACE }} || \
+             kubectl create namespace ${{ vars.NAMESPACE }}
+
+        - name: create MongoDB secret
+          run: |
+            kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
+            --from-literal=MONGO_URI=${{ env.MONGO_URI }} \
+            --from-literal=MONGO_USERNAME=${{ env.MONGO_USERNAME }} \
+            --from-literal=MONGO_PASSWORD=${{ env.MONGO_PASSWORD }} \
+            --save-config \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+        - name: Deploy to DEV ENV
+          run: |
+            kubectl apply -f kubernetes/development
+          
+        - name: set Application Ingress host URL
+          id: set_ingress_host_address
+          run: |
+            echo "APP_ingress_host=$(kubectl get ing -n ${{ vars.NAMESPACE }} -o jsonpath="{.items[*].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
+
+    DEV_Integration_test:
+          name: Dev Integration testing
+          if: contains(github.ref, 'feature/')
+          needs: dev-kuber
+          runs-on: self-hosted
+          steps:
+            - name: Testing using CURL URL
+              env:
+                URL: ${{ needs.dev-kuber.outputs.APP_ingress_URL }}
+              run: |
+                echo $URL
+                echo "================================="
+                curl https://$URL/live -s -k | jq -r .status | grep -i live
+
+
+
+#production environment########
+
+    prod-kuber:
+      needs: docker
+      if: github.ref == 'refs/head/main'
+      environment:
+        name: production
+        url: https://${{ steps.set_ingress_host_address.outputs.APP_ingress_host }}
+      outputs:
+        APP_ingress_URL: ${{ steps.set_ingress_host_address.outputs.APP_ingress_host }} 
+
+      runs-on: self-hosted
+      steps:
+        - name: checkout Repo
+          uses: actions/checkout@v5
+
+        - name: Installing kubectl
+          uses: azure/setup-kubectl@v4
+
+        - name: Fetch k8's cluster details
+          run: |
+            kubectl version --client
+            echo -------------------------------------
+            kubectl get nodes
+
+        - name: saving Ingress IP as ENV variable
+          run: |
+            echo "INGRESS_IP=$(kubectl -n ingress-nginx get service ingress-nginx-controller -o jsonpath='{.status.loadBalancer.ingress[*].ip}')" >> $GITHUB_ENV
+
+        - name: Replace token in manifest files
+          uses: cschleiden/replace-tokens@v1
+          with:
+            tokenPrefix: '{'
+            tokenSuffix: '}'
+            files: '["kubernetes/staging/*.yaml"]'
+          env:
+            NAMESPACE: ${{ vars.NAMESPACE }}
+            REPLICAS: ${{ vars.REPLICAS }}
+            IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/solar-system:${{ github.sha }}
+            INGRESS_IP: ${{ env.INGRESS_IP }}
+
+        - name: Check files
+          run: cat kubernetes/staging/*.yaml
+
+        - name: Ensure namespace exists
+          run: |
+             kubectl get namespace ${{ vars.NAMESPACE }} || \
+             kubectl create namespace ${{ vars.NAMESPACE }}
+
+        - name: create MongoDB secret
+          run: |
+            kubectl -n ${{ vars.NAMESPACE }} create secret generic mongo-db-creds \
+            --from-literal=MONGO_URI=${{ env.MONGO_URI }} \
+            --from-literal=MONGO_USERNAME=${{ env.MONGO_USERNAME }} \
+            --from-literal=MONGO_PASSWORD=${{ env.MONGO_PASSWORD }} \
+            --save-config \
+            --dry-run=client \
+            -o yaml | kubectl apply -f -
+
+        - name: Deploy to DEV ENV
+          run: |
+            kubectl apply -f kubernetes/staging
+          
+        - name: set Application Ingress host URL
+          id: set_ingress_host_address
+          run: |
+            echo "APP_ingress_host=$(kubectl get ing -n ${{ vars.NAMESPACE }} -o jsonpath="{.items[*].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
+
+    prod_Integration_test:
+          name: prod Integration testing
+          needs: prod-kuber
+          runs-on: self-hosted
+          steps:
+            - name: Testing using CURL URL
+              env:
+                URL: ${{ needs.prod-kuber.outputs.APP_ingress_URL }}
+              run: |
+                echo $URL
+                echo "================================="
+                curl https://$URL/live -s -k | jq -r .status | grep -i live
+
+      
+
+
+
