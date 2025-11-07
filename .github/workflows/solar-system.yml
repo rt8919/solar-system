@@ -291,6 +291,7 @@ jobs:
             echo "APP_ingress_host=$(kubectl get ing -n ${{ vars.NAMESPACE }} -o jsonpath="{.items[*].spec.tls[0].hosts[0]}")" >> "$GITHUB_OUTPUT"
 
     prod_Integration_test:
+          if: github.ref == 'refs/heads/main'
           name: prod Integration testing
           needs: prod-kuber
           runs-on: self-hosted
