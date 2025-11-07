@@ -142,6 +142,9 @@ jobs:
 
     kuber:
       needs: docker
+      environment:
+        name: development
+        url: https://${{ steps.set_ingress_host_address.outputs.APP_ingress_host }}
       outputs:
         APP_ingress_URL: ${{ steps.set_ingress_host_address.outputs.APP_ingress_host }} 
 
