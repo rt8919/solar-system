@@ -226,7 +226,7 @@ jobs:
 
     prod-kuber:
       needs: docker
-      if: github.ref == 'refs/head/main'
+      if: github.ref == 'refs/heads/main'
       environment:
         name: production
         url: https://${{ steps.set_ingress_host_address.outputs.APP_ingress_host }}
