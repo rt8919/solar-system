@@ -225,7 +225,7 @@ jobs:
 #production environment########
 
     prod-kuber:
-      needs: DEV_Integration_test
+      needs: docker
       if: github.ref == 'refs/head/main'
       environment:
         name: production
