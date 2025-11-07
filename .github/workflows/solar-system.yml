@@ -212,7 +212,7 @@ jobs:
           steps:
             - name: Testing using CURL URL
               env:
-                URL: ${{ needs.kuber.outputs.APP_ingress_URL }}
+                URL: ${{ needs.dev-kuber.outputs.APP_ingress_URL }}
               run: |
                 echo $URL
                 echo "================================="
