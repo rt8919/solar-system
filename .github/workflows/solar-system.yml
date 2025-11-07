@@ -141,6 +141,7 @@ jobs:
               ghcr.io/${{github.repository_owner}}/solar-system:${{ github.sha }}
 
     dev-kuber:
+      if: contains(github.ref, 'feature/')
       needs: docker
       environment:
         name: development
@@ -207,6 +208,7 @@ jobs:
 
     DEV_Integration_test:
           name: Dev Integration testing
+          if: contains(github.ref, 'feature/')
           needs: dev-kuber
           runs-on: self-hosted
           steps:
@@ -224,6 +226,7 @@ jobs:
 
     prod-kuber:
       needs: DEV_Integration_test
+      if: github.ref == 'refs/head/main'
       environment:
         name: production
         url: https://${{ steps.set_ingress_host_address.outputs.APP_ingress_host }}
