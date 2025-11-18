@@ -108,6 +108,8 @@ jobs:
           uses: actions/download-artifact@v4
           with: 
             name: Code Coverage result
+            repository: rt8919/solar-system
+            run-id: 19465578636
 
         - name: Merge Test results
           run : |
