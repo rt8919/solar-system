@@ -92,12 +92,12 @@ jobs:
       continue-on-error: true
       steps:
         - name: Download Mocha artifact
-          uses: actions/download-artifact@v3
+          uses: actions/download-artifact@v4
           with: 
             name: mocha-Test-result
 
         - name: Download Code coverage artifact
-          uses: actions/download-artifact@v3
+          uses: actions/download-artifact@v4
           with: 
             name: code-coverage-Test-result
 
