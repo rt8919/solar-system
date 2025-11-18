@@ -50,6 +50,13 @@ jobs:
           id: nodejs-unit-testing-step
           run: npm test
 
+        - name: Archive Test result
+          uses: actions/upload-artifact@v4
+          with:
+            name: Mocha test resultsss
+            path: test-resultsa.xml
+          
+
 
         # - name: Archive Test result
         # ## if failureif: failure() && (steps.nodejs-unit-testing-step == 'failure' || steps.nodejs-unit-testing-step == 'success')
@@ -78,12 +85,12 @@ jobs:
           continue-on-error: true
           run: npm run coverage
 
-        # - name: Archive Test result
-        #   uses: actions/upload-artifact@v4
-        #   with:
-        #     name: Code Coverage result
-        #     path: coverage
-        #     retention-days: 5
+        - name: Archive Test result
+          uses: actions/upload-artifact@v4
+          with:
+            name: Code Coverage result
+            path: coverage
+            retention-days: 5
 
     reports-s3:
       name: AWS upload reports
@@ -92,12 +99,12 @@ jobs:
       continue-on-error: true
       steps:
         - name: Download Mocha artifact
-          uses: actions/download-artifact@v5
+          uses: actions/download-artifact@v4
           with: 
             name: mocha-Test-result
 
         - name: Download Code coverage artifact
-          uses: actions/download-artifact@v5
+          uses: actions/download-artifact@v4
           with: 
             name: code-coverage-Test-result
 
