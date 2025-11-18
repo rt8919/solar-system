@@ -101,12 +101,12 @@ jobs:
         - name: Download Mocha artifact
           uses: actions/download-artifact@v4
           with: 
-            name: mocha-Test-result
+            name: Mocha test resultsss
 
         - name: Download Code coverage artifact
           uses: actions/download-artifact@v4
           with: 
-            name: code-coverage-Test-result
+            name: Code Coverage result
 
         - name: Merge Test results
           run : |
