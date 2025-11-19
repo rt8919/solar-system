@@ -356,8 +356,6 @@ jobs:
       runs-on: ubuntu-latest
       continue-on-error: true
       steps:
-      # - uses: action/checkout@v4
-      # - name: Slack Notification
         uses: rtCamp/action-slack-notify@v2
         env:
           SLACK_CHANNEL: githubr3-action
